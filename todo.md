@@ -38,3 +38,10 @@
 - [x] ページタイトルを30〜60文字に最適化
 - [x] メタディスクリプションを50〜160文字で追加
 - [x] キーワードを含むコンテンツを追加
+
+
+## 構造化データ（Schema.org）
+- [x] JSON-LDスキーマの実装（SoftwareApplication）
+- [x] WebApplicationスキーマの追加
+- [x] Organization/Creatorスキーマの追加
+- [x] 構造化データのテスト検証
