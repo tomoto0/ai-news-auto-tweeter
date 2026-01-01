@@ -32,3 +32,9 @@
 - [x] Unit tests for X API integration
 - [x] Unit tests for tweet operations
 - [x] Unit tests for schedule management
+
+
+## SEO修正
+- [x] ページタイトルを30〜60文字に最適化
+- [x] メタディスクリプションを50〜160文字で追加
+- [x] キーワードを含むコンテンツを追加

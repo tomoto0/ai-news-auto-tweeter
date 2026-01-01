@@ -5,9 +5,24 @@ import { ArrowRight, Zap, Clock, BarChart3 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 
+function useSEO(title: string, description: string) {
+  useEffect(() => {
+    document.title = title;
+    const metaDescription = document.querySelector('meta[name="description"]');
+    if (metaDescription) {
+      metaDescription.setAttribute('content', description);
+    }
+  }, [title, description]);
+}
+
 export default function Home() {
   const { user, loading } = useAuth();
   const [, setLocation] = useLocation();
+  
+  useSEO(
+    'AI News Auto Tweeter | 最新AIニュース自動要約ツイート投稿',
+    'AI関連ニュースを自動取得し、LLMで要約してX（Twitter）に自動投稿するWebアプリ。無料で始められます。'
+  );
 
   useEffect(() => {
     if (user && !loading) {
@@ -17,6 +32,11 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Hidden SEO keywords section */}
+      <div className="sr-only">
+        <h1>AI News Auto Tweeter - 最新AIニュース自動要約ツイート投稿ツール</h1>
+        <p>AI関連ニュースを自動取得し、LLMで要約してX（Twitter）に自動投稿するWebアプリケーション。人工知能、機械学習、ChatGPT、OpenAIなどの最新ニュースを効率的に自動化。</p>
+      </div>
       {/* Header */}
       <header className="border-b border-foreground">
         <div className="container flex h-16 items-center justify-between">
