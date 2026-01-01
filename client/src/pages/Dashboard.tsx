@@ -3,16 +3,80 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { Newspaper, Send, Clock, Settings, ArrowRight, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { Newspaper, Send, Clock, Settings, ArrowRight, CheckCircle, XCircle, AlertCircle, Loader2, Sparkles, RefreshCw } from "lucide-react";
 import { useLocation } from "wouter";
+import { useState } from "react";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [selectedNews, setSelectedNews] = useState<any>(null);
+  const [summary, setSummary] = useState("");
   
   const { data: credentials } = trpc.xCredentials.get.useQuery();
   const { data: history } = trpc.tweets.history.useQuery({ limit: 5 });
   const { data: schedule } = trpc.schedule.get.useQuery();
+  const { data: news, isLoading: newsLoading, refetch: refetchNews } = trpc.news.fetch.useQuery();
+  
+  const summarizeMutation = trpc.news.summarize.useMutation({
+    onSuccess: (data) => {
+      const summaryText = typeof data.summary === 'string' ? data.summary : '';
+      setSummary(summaryText);
+      setIsPreviewOpen(true);
+    },
+    onError: (error) => {
+      toast.error(`要約生成に失敗しました: ${error.message}`);
+    },
+  });
+  
+  const postMutation = trpc.tweets.post.useMutation({
+    onSuccess: () => {
+      toast.success("ツイートを投稿しました！");
+      setIsPreviewOpen(false);
+      setSummary("");
+      setSelectedNews(null);
+      trpc.useUtils().tweets.history.invalidate();
+    },
+    onError: (error) => {
+      toast.error(`投稿に失敗しました: ${error.message}`);
+    },
+  });
+  
+  const handleQuickPost = (newsItem: any) => {
+    setSelectedNews(newsItem);
+    summarizeMutation.mutate({
+      title: newsItem.title,
+      description: newsItem.description,
+      url: newsItem.url,
+    });
+  };
+  
+  const handlePost = () => {
+    if (!summary.trim()) {
+      toast.error("ツイート内容を入力してください");
+      return;
+    }
+    if (!credentials?.hasCredentials) {
+      toast.error("X API認証情報を設定してください");
+      return;
+    }
+    postMutation.mutate({
+      content: summary,
+      newsTitle: selectedNews?.title,
+      newsUrl: selectedNews?.url,
+    });
+  };
 
   const stats = {
     totalTweets: history?.length ?? 0,
@@ -175,6 +239,97 @@ export default function Dashboard() {
           </Card>
         </div>
 
+        {/* Manual Post Section */}
+        <Card className="border-foreground">
+          <CardHeader className="border-b border-muted pb-4">
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              手動投稿
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {!credentials?.hasCredentials ? (
+              <div className="p-4 bg-muted/30 border border-foreground text-center">
+                <p className="text-sm text-muted-foreground mb-3">
+                  手動投稿を使用するには、X API認証情報を設定してください。
+                </p>
+                <Button 
+                  size="sm"
+                  variant="outline"
+                  className="border-foreground"
+                  onClick={() => setLocation("/settings")}
+                >
+                  設定を開く
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    最新のニュースから選択して、即座にツイートを投稿できます。
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => refetchNews()}
+                    disabled={newsLoading}
+                    className="text-muted-foreground"
+                  >
+                    {newsLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+
+                {newsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : news && news.length > 0 ? (
+                  <div className="space-y-3">
+                    {news.slice(0, 3).map((item) => (
+                      <div key={item.id} className="p-3 border border-muted hover:border-foreground transition-colors">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium line-clamp-2">{item.title}</p>
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                              {item.source} • {new Date(item.publishedAt).toLocaleString("ja-JP", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => handleQuickPost(item)}
+                            disabled={summarizeMutation.isPending && selectedNews?.id === item.id}
+                            className="shrink-0 bg-primary text-primary-foreground"
+                          >
+                            {summarizeMutation.isPending && selectedNews?.id === item.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Sparkles className="h-4 w-4" />
+                            )}
+                            <span className="ml-2">投稿</span>
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p className="text-sm">ニュースが見つかりませんでした</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Recent Tweets */}
         {history && history.length > 0 && (
           <Card className="border-foreground">
@@ -209,6 +364,62 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         )}
+
+        {/* Preview Dialog */}
+        <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+          <DialogContent className="sm:max-w-lg border-foreground">
+            <DialogHeader>
+              <DialogTitle>ツイートプレビュー</DialogTitle>
+              <DialogDescription>
+                内容を確認・編集してから投稿できます
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {selectedNews && (
+                <div className="p-3 bg-muted/30 border border-muted">
+                  <p className="text-xs text-muted-foreground mb-1">元記事</p>
+                  <p className="text-sm font-medium">{selectedNews.title}</p>
+                </div>
+              )}
+              <div className="space-y-2">
+                <Textarea
+                  value={summary}
+                  onChange={(e) => setSummary(e.target.value)}
+                  rows={5}
+                  className="resize-none border-foreground"
+                  placeholder="ツイート内容..."
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>文字数: {summary.length}</span>
+                  <span className={summary.length > 280 ? "text-destructive" : ""}>
+                    {summary.length > 280 ? "280文字を超えています" : `残り ${280 - summary.length} 文字`}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsPreviewOpen(false)}
+                className="border-foreground"
+              >
+                キャンセル
+              </Button>
+              <Button
+                onClick={handlePost}
+                disabled={postMutation.isPending || summary.length > 280 || !credentials?.hasCredentials}
+                className="bg-primary text-primary-foreground"
+              >
+                {postMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Send className="h-4 w-4 mr-2" />
+                )}
+                投稿する
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
