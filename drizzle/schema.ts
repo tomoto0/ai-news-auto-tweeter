@@ -1,17 +1,10 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
  */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -25,4 +18,59 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+/**
+ * X (Twitter) API credentials per user
+ * Stores encrypted API keys for each user
+ */
+export const xCredentials = mysqlTable("x_credentials", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  apiKey: text("apiKey").notNull(),
+  apiSecret: text("apiSecret").notNull(),
+  accessToken: text("accessToken").notNull(),
+  accessTokenSecret: text("accessTokenSecret").notNull(),
+  isValid: boolean("isValid").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type XCredentials = typeof xCredentials.$inferSelect;
+export type InsertXCredentials = typeof xCredentials.$inferInsert;
+
+/**
+ * Tweet history - stores all posted tweets
+ */
+export const tweetHistory = mysqlTable("tweet_history", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  content: text("content").notNull(),
+  originalNewsTitle: text("originalNewsTitle"),
+  originalNewsUrl: text("originalNewsUrl"),
+  tweetId: varchar("tweetId", { length: 64 }),
+  status: mysqlEnum("status", ["pending", "posted", "failed"]).default("pending").notNull(),
+  errorMessage: text("errorMessage"),
+  postedAt: timestamp("postedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TweetHistory = typeof tweetHistory.$inferSelect;
+export type InsertTweetHistory = typeof tweetHistory.$inferInsert;
+
+/**
+ * Auto-tweet schedule settings per user
+ */
+export const scheduleSettings = mysqlTable("schedule_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  isEnabled: boolean("isEnabled").default(false).notNull(),
+  frequency: mysqlEnum("frequency", ["hourly", "every_3_hours", "every_6_hours", "daily"]).default("daily").notNull(),
+  preferredHour: int("preferredHour").default(9),
+  timezone: varchar("timezone", { length: 64 }).default("Asia/Tokyo"),
+  maxTweetsPerDay: int("maxTweetsPerDay").default(5),
+  lastRunAt: timestamp("lastRunAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ScheduleSettings = typeof scheduleSettings.$inferSelect;
+export type InsertScheduleSettings = typeof scheduleSettings.$inferInsert;

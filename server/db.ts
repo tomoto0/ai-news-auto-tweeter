@@ -1,11 +1,15 @@
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { 
+  InsertUser, users, 
+  xCredentials, InsertXCredentials, XCredentials,
+  tweetHistory, InsertTweetHistory, TweetHistory,
+  scheduleSettings, InsertScheduleSettings, ScheduleSettings
+} from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -89,4 +93,156 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// ============================================
+// X Credentials Operations
+// ============================================
+
+export async function getXCredentialsByUserId(userId: number): Promise<XCredentials | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(xCredentials).where(eq(xCredentials.userId, userId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function upsertXCredentials(data: InsertXCredentials): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await getXCredentialsByUserId(data.userId);
+  
+  if (existing) {
+    await db.update(xCredentials)
+      .set({
+        apiKey: data.apiKey,
+        apiSecret: data.apiSecret,
+        accessToken: data.accessToken,
+        accessTokenSecret: data.accessTokenSecret,
+        isValid: data.isValid ?? true,
+      })
+      .where(eq(xCredentials.userId, data.userId));
+  } else {
+    await db.insert(xCredentials).values(data);
+  }
+}
+
+export async function deleteXCredentials(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(xCredentials).where(eq(xCredentials.userId, userId));
+}
+
+export async function updateXCredentialsValidity(userId: number, isValid: boolean): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(xCredentials)
+    .set({ isValid })
+    .where(eq(xCredentials.userId, userId));
+}
+
+// ============================================
+// Tweet History Operations
+// ============================================
+
+export async function createTweetHistory(data: InsertTweetHistory): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(tweetHistory).values(data);
+  return Number(result[0].insertId);
+}
+
+export async function getTweetHistoryByUserId(userId: number, limit: number = 50): Promise<TweetHistory[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select()
+    .from(tweetHistory)
+    .where(eq(tweetHistory.userId, userId))
+    .orderBy(desc(tweetHistory.createdAt))
+    .limit(limit);
+}
+
+export async function updateTweetStatus(
+  id: number, 
+  status: "pending" | "posted" | "failed", 
+  tweetId?: string,
+  errorMessage?: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const updateData: Partial<TweetHistory> = { status };
+  if (tweetId) updateData.tweetId = tweetId;
+  if (errorMessage) updateData.errorMessage = errorMessage;
+  if (status === "posted") updateData.postedAt = new Date();
+
+  await db.update(tweetHistory)
+    .set(updateData)
+    .where(eq(tweetHistory.id, id));
+}
+
+export async function deleteTweetHistory(id: number, userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(tweetHistory)
+    .where(eq(tweetHistory.id, id));
+}
+
+// ============================================
+// Schedule Settings Operations
+// ============================================
+
+export async function getScheduleSettingsByUserId(userId: number): Promise<ScheduleSettings | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select()
+    .from(scheduleSettings)
+    .where(eq(scheduleSettings.userId, userId))
+    .limit(1);
+  
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function upsertScheduleSettings(data: InsertScheduleSettings): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await getScheduleSettingsByUserId(data.userId);
+  
+  if (existing) {
+    await db.update(scheduleSettings)
+      .set({
+        isEnabled: data.isEnabled,
+        frequency: data.frequency,
+        preferredHour: data.preferredHour,
+        timezone: data.timezone,
+        maxTweetsPerDay: data.maxTweetsPerDay,
+      })
+      .where(eq(scheduleSettings.userId, data.userId));
+  } else {
+    await db.insert(scheduleSettings).values(data);
+  }
+}
+
+export async function updateLastRunAt(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(scheduleSettings)
+    .set({ lastRunAt: new Date() })
+    .where(eq(scheduleSettings.userId, userId));
+}
+
+export async function getEnabledSchedules(): Promise<ScheduleSettings[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select()
+    .from(scheduleSettings)
+    .where(eq(scheduleSettings.isEnabled, true));
+}
