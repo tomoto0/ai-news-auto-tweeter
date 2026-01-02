@@ -28,6 +28,15 @@ export default function Dashboard() {
   const { data: history } = trpc.tweets.history.useQuery({ limit: 5 });
   const { data: schedule } = trpc.schedule.get.useQuery();
   const { data: news, isLoading: newsLoading, refetch: refetchNews } = trpc.news.fetch.useQuery();
+  const refreshNewsMutation = trpc.news.refresh.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.length}件のニュースを取得しました`);
+      trpc.useUtils().news.fetch.invalidate();
+    },
+    onError: (error) => {
+      toast.error(`ニュース更新に失敗しました: ${error.message}`);
+    },
+  });
   
   const summarizeMutation = trpc.news.summarize.useMutation({
     onSuccess: (data) => {
@@ -271,11 +280,11 @@ export default function Dashboard() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => refetchNews()}
-                    disabled={newsLoading}
+                    onClick={() => refreshNewsMutation.mutate()}
+                    disabled={newsLoading || refreshNewsMutation.isPending}
                     className="text-muted-foreground"
                   >
-                    {newsLoading ? (
+                    {newsLoading || refreshNewsMutation.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <RefreshCw className="h-4 w-4" />

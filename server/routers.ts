@@ -14,6 +14,7 @@ import {
   updateTweetStatus,
   deleteTweetHistory,
   getScheduleSettingsByUserId,
+  getScheduleSettings,
   upsertScheduleSettings,
 } from "./db";
 import { postTweet, verifyCredentials } from "./twitter";
@@ -94,6 +95,14 @@ export const appRouter = router({
   // News Operations
   news: router({
     fetch: protectedProcedure.query(async () => {
+      const news = await fetchAINews();
+      return news;
+    }),
+
+    refresh: protectedProcedure.mutation(async () => {
+      // Clear cache and fetch fresh news
+      const { clearNewsCache } = await import("./news");
+      clearNewsCache();
       const news = await fetchAINews();
       return news;
     }),
@@ -236,10 +245,37 @@ export const appRouter = router({
         maxTweetsPerDay: z.number().min(1).max(20),
       }))
       .mutation(async ({ ctx, input }) => {
+        let cronExpression = "0 0 * * *";
+        if (input.frequency === "hourly") {
+          cronExpression = "0 * * * *";
+        } else if (input.frequency === "every_3_hours") {
+          cronExpression = "0 */3 * * *";
+        } else if (input.frequency === "every_6_hours") {
+          cronExpression = "0 */6 * * *";
+        } else if (input.frequency === "daily") {
+          cronExpression = `0 ${input.preferredHour} * * *`;
+        }
+
         await upsertScheduleSettings({
           userId: ctx.user.id,
-          ...input,
+          isEnabled: input.isEnabled,
+          frequency: input.frequency,
+          preferredHour: input.preferredHour,
+          timezone: input.timezone,
+          maxTweetsPerDay: input.maxTweetsPerDay,
+          cronExpression,
         });
+
+        const { startScheduleJob, stopScheduleJob } = await import("./scheduler");
+        if (input.isEnabled) {
+          const schedule = await getScheduleSettings(ctx.user.id);
+          if (schedule) {
+            startScheduleJob(ctx.user.id, { ...schedule, cronExpression });
+          }
+        } else {
+          stopScheduleJob(ctx.user.id);
+        }
+
         return { success: true };
       }),
   }),

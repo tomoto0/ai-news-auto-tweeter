@@ -67,6 +67,7 @@ export const scheduleSettings = mysqlTable("schedule_settings", {
   preferredHour: int("preferredHour").default(9),
   timezone: varchar("timezone", { length: 64 }).default("Asia/Tokyo"),
   maxTweetsPerDay: int("maxTweetsPerDay").default(5),
+  cronExpression: varchar("cronExpression", { length: 255 }).default("0 0 * * *"),
   lastRunAt: timestamp("lastRunAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

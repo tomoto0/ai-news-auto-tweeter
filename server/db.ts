@@ -196,6 +196,10 @@ export async function deleteTweetHistory(id: number, userId: number): Promise<vo
 // Schedule Settings Operations
 // ============================================
 
+export async function getScheduleSettings(userId: number): Promise<ScheduleSettings | undefined> {
+  return getScheduleSettingsByUserId(userId);
+}
+
 export async function getScheduleSettingsByUserId(userId: number): Promise<ScheduleSettings | undefined> {
   const db = await getDb();
   if (!db) return undefined;
@@ -222,6 +226,7 @@ export async function upsertScheduleSettings(data: InsertScheduleSettings): Prom
         preferredHour: data.preferredHour,
         timezone: data.timezone,
         maxTweetsPerDay: data.maxTweetsPerDay,
+        cronExpression: (data as any).cronExpression,
       })
       .where(eq(scheduleSettings.userId, data.userId));
   } else {

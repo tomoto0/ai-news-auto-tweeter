@@ -15,6 +15,13 @@
       "when": 1767281923856,
       "tag": "0001_regular_catseye",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1767312729893,
+      "tag": "0002_glossy_captain_stacy",
+      "breakpoints": true
     }
   ]
 }

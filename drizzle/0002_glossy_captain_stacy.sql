@@ -1,0 +1,1 @@
+ALTER TABLE `schedule_settings` ADD `cronExpression` varchar(255) DEFAULT '0 0 * * *';
