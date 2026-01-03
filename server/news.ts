@@ -51,10 +51,16 @@ function isCacheValid(): boolean {
  * Uses Manus built-in API with fallback to mock data
  */
 export async function fetchAINews(): Promise<AINewsItem[]> {
-  // Return cached data if still valid
-  if (isCacheValid() && newsCache.data.length > 0) {
-    console.log("[News] Returning cached news data");
+  // Return cached data if still valid AND cache has data
+  // If cache is cleared (timestamp = 0), always fetch fresh data
+  if (newsCache.timestamp > 0 && isCacheValid() && newsCache.data.length > 0) {
+    console.log("[News] Returning cached news data", { cacheSize: newsCache.data.length, age: Date.now() - newsCache.timestamp });
     return newsCache.data;
+  }
+  
+  // If cache was cleared (timestamp = 0), always fetch fresh
+  if (newsCache.timestamp === 0) {
+    console.log("[News] Cache was cleared, fetching fresh data");
   }
 
   try {
@@ -173,9 +179,11 @@ export function clearNewsCache(): void {
  */
 function getMockNews(): AINewsItem[] {
   const now = new Date();
+  // Generate unique mock data with current timestamp to ensure freshness
+  const timestamp = Date.now();
   const mockData = [
     {
-      id: "mock-1",
+      id: `mock-1-${timestamp}`,
       title: "OpenAI Announces GPT-5 with Revolutionary Capabilities",
       description: "OpenAI has unveiled its latest language model, GPT-5, featuring unprecedented reasoning abilities and multimodal understanding. The new model shows significant improvements in complex problem-solving and creative tasks.",
       url: "https://example.com/news/gpt5-announcement",
@@ -184,7 +192,7 @@ function getMockNews(): AINewsItem[] {
       category: "OpenAI",
     },
     {
-      id: "mock-2",
+      id: `mock-2-${timestamp}`,
       title: "Google DeepMind Achieves Breakthrough in Protein Folding",
       description: "DeepMind's AlphaFold 3 has successfully predicted the structure of nearly all known proteins, opening new possibilities for drug discovery and understanding diseases at the molecular level.",
       url: "https://example.com/news/alphafold3",
@@ -193,7 +201,7 @@ function getMockNews(): AINewsItem[] {
       category: "machine learning",
     },
     {
-      id: "mock-3",
+      id: `mock-3-${timestamp}`,
       title: "AI Regulation Framework Proposed by EU Commission",
       description: "The European Union has proposed comprehensive AI regulations that would require transparency in AI systems and establish safety standards for high-risk applications.",
       url: "https://example.com/news/eu-ai-regulation",
@@ -202,7 +210,7 @@ function getMockNews(): AINewsItem[] {
       category: "AI news",
     },
     {
-      id: "mock-4",
+      id: `mock-4-${timestamp}`,
       title: "Microsoft Integrates AI Copilot Across All Products",
       description: "Microsoft announces the expansion of its AI Copilot feature to all Microsoft 365 applications, promising to revolutionize workplace productivity with intelligent assistance.",
       url: "https://example.com/news/microsoft-copilot",
@@ -211,7 +219,7 @@ function getMockNews(): AINewsItem[] {
       category: "artificial intelligence",
     },
     {
-      id: "mock-5",
+      id: `mock-5-${timestamp}`,
       title: "Anthropic Releases Claude 4 with Enhanced Safety Features",
       description: "Anthropic's new Claude 4 model introduces advanced safety mechanisms and improved reasoning capabilities, setting new standards for responsible AI development.",
       url: "https://example.com/news/claude4-release",
@@ -220,7 +228,7 @@ function getMockNews(): AINewsItem[] {
       category: "ChatGPT",
     },
     {
-      id: "mock-6",
+      id: `mock-6-${timestamp}`,
       title: "Meta Releases Llama 3 Open Source Model",
       description: "Meta has released Llama 3, a powerful open-source language model that rivals proprietary solutions. The model is available for commercial use and research.",
       url: "https://example.com/news/llama3-release",
@@ -229,7 +237,7 @@ function getMockNews(): AINewsItem[] {
       category: "machine learning",
     },
     {
-      id: "mock-7",
+      id: `mock-7-${timestamp}`,
       title: "AI-Powered Drug Discovery Accelerates Clinical Trials",
       description: "Pharmaceutical companies are using AI to identify promising drug candidates 50% faster than traditional methods, potentially saving billions in development costs.",
       url: "https://example.com/news/ai-drug-discovery",
