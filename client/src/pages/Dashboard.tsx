@@ -30,15 +30,22 @@ export default function Dashboard() {
   const { data: news, isLoading: newsLoading, refetch: refetchNews } = trpc.news.fetch.useQuery();
   const refreshNewsMutation = trpc.news.refresh.useMutation({
     onSuccess: (data: any) => {
-      if (Array.isArray(data)) {
-        toast.success(`${data.length}件のニュースを取得しました`);
-      } else {
-        toast.success("ニュースを取得しました");
+      try {
+        if (Array.isArray(data)) {
+          toast.success(`${data.length}件のニュースを取得しました`);
+        } else {
+          toast.success("ニュースを取得しました");
+        }
+        const utils = trpc.useUtils();
+        utils.news.fetch.invalidate();
+        utils.news.fetch.refetch();
+      } catch (err) {
+        console.error("Error in refreshNewsMutation onSuccess:", err);
       }
-      trpc.useUtils().news.fetch.invalidate();
     },
     onError: (error: any) => {
       const errorMsg = error?.message || "不明なエラー";
+      console.error("Refresh mutation error:", error);
       toast.error(`ニュース更新に失敗しました: ${errorMsg}`);
     },
   });
