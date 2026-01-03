@@ -29,12 +29,17 @@ export default function Dashboard() {
   const { data: schedule } = trpc.schedule.get.useQuery();
   const { data: news, isLoading: newsLoading, refetch: refetchNews } = trpc.news.fetch.useQuery();
   const refreshNewsMutation = trpc.news.refresh.useMutation({
-    onSuccess: (data) => {
-      toast.success(`${data.length}件のニュースを取得しました`);
+    onSuccess: (data: any) => {
+      if (Array.isArray(data)) {
+        toast.success(`${data.length}件のニュースを取得しました`);
+      } else {
+        toast.success("ニュースを取得しました");
+      }
       trpc.useUtils().news.fetch.invalidate();
     },
-    onError: (error) => {
-      toast.error(`ニュース更新に失敗しました: ${error.message}`);
+    onError: (error: any) => {
+      const errorMsg = error?.message || "不明なエラー";
+      toast.error(`ニュース更新に失敗しました: ${errorMsg}`);
     },
   });
   
