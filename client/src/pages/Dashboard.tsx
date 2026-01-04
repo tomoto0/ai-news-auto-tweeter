@@ -24,24 +24,23 @@ export default function Dashboard() {
   const [selectedNews, setSelectedNews] = useState<any>(null);
   const [summary, setSummary] = useState("");
   
+  // Move trpc.useUtils() to component level (not inside callback)
+  const utils = trpc.useUtils();
+  
   const { data: credentials } = trpc.xCredentials.get.useQuery();
   const { data: history } = trpc.tweets.history.useQuery({ limit: 5 });
   const { data: schedule } = trpc.schedule.get.useQuery();
   const { data: news, isLoading: newsLoading, refetch: refetchNews } = trpc.news.fetch.useQuery();
   const refreshNewsMutation = trpc.news.refresh.useMutation({
     onSuccess: (data: any) => {
-      try {
-        if (Array.isArray(data)) {
-          toast.success(`${data.length}件のニュースを取得しました`);
-        } else {
-          toast.success("ニュースを取得しました");
-        }
-        const utils = trpc.useUtils();
-        utils.news.fetch.invalidate();
-        utils.news.fetch.refetch();
-      } catch (err) {
-        console.error("Error in refreshNewsMutation onSuccess:", err);
+      if (Array.isArray(data)) {
+        toast.success(`${data.length}件のニュースを取得しました`);
+      } else {
+        toast.success("ニュースを取得しました");
       }
+      // Use utils from component level
+      utils.news.fetch.invalidate();
+      utils.news.fetch.refetch();
     },
     onError: (error: any) => {
       const errorMsg = error?.message || "不明なエラー";

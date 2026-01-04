@@ -113,3 +113,10 @@
 - [x] キャッシュクリアロジックの検証
 - [x] フロントエンドのrefetch()の実行確認
 - [x] ニュース表示の再レンダリング確認
+
+
+## React error #321修正（onSuccess内のhooks呼び出し）
+- [x] refreshNewsMutationのonSuccessコールバックを修正
+- [x] trpc.useUtils()をコンポーネント最上位に移動
+- [x] invalidate()とrefetch()の呼び出しを修正
+- [x] ニュース更新機能の動作確認
