@@ -100,10 +100,13 @@ export const appRouter = router({
     }),
 
     refresh: protectedProcedure.mutation(async () => {
+      console.log("[Router] news.refresh mutation called");
       // Clear cache and fetch fresh news
       const { clearNewsCache } = await import("./news");
       clearNewsCache();
+      console.log("[Router] Cache cleared, fetching fresh news");
       const news = await fetchAINews();
+      console.log("[Router] Fetched", news.length, "news items");
       return news;
     }),
 

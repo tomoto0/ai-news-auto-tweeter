@@ -51,6 +51,8 @@ function isCacheValid(): boolean {
  * Uses Manus built-in API with fallback to mock data
  */
 export async function fetchAINews(): Promise<AINewsItem[]> {
+  console.log("[News] fetchAINews called", { cacheTimestamp: newsCache.timestamp, cacheSize: newsCache.data.length });
+  
   // Return cached data if still valid AND cache has data
   // If cache is cleared (timestamp = 0), always fetch fresh data
   if (newsCache.timestamp > 0 && isCacheValid() && newsCache.data.length > 0) {
