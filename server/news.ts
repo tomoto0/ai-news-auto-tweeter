@@ -50,14 +50,17 @@ function isCacheValid(): boolean {
  * Fetch AI-related news from multiple sources
  * Uses Manus built-in API with fallback to mock data
  */
-export async function fetchAINews(): Promise<AINewsItem[]> {
-  console.log("[News] fetchAINews called", { cacheTimestamp: newsCache.timestamp, cacheSize: newsCache.data.length });
+export async function fetchAINews(forceRefresh: boolean = false): Promise<AINewsItem[]> {
+  console.log("[News] fetchAINews called", { forceRefresh, cacheTimestamp: newsCache.timestamp, cacheSize: newsCache.data.length });
   
-  // Return cached data if still valid AND cache has data
-  // If cache is cleared (timestamp = 0), always fetch fresh data
-  if (newsCache.timestamp > 0 && isCacheValid() && newsCache.data.length > 0) {
+  // If forceRefresh is true, skip cache and fetch fresh data
+  if (!forceRefresh && newsCache.timestamp > 0 && isCacheValid() && newsCache.data.length > 0) {
     console.log("[News] Returning cached news data", { cacheSize: newsCache.data.length, age: Date.now() - newsCache.timestamp });
     return newsCache.data;
+  }
+  
+  if (forceRefresh) {
+    console.log("[News] Force refresh requested, fetching fresh data");
   }
   
   // If cache was cleared (timestamp = 0), always fetch fresh
