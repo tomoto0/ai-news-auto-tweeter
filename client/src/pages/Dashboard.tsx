@@ -38,9 +38,8 @@ export default function Dashboard() {
       } else {
         toast.success("ニュースを取得しました");
       }
-      // Use utils from component level
-      utils.news.fetch.invalidate();
-      utils.news.fetch.refetch();
+      // Refetch news data to update the UI
+      refetchNews();
     },
     onError: (error: any) => {
       const errorMsg = error?.message || "不明なエラー";
