@@ -33,11 +33,8 @@ export default function Dashboard() {
   const { data: news, isLoading: newsLoading, refetch: refetchNews } = trpc.news.fetch.useQuery();
   const refreshNewsMutation = trpc.news.refresh.useMutation({
     onSuccess: (data: any) => {
-      if (Array.isArray(data)) {
-        toast.success(`${data.length}件のニュースを取得しました`);
-      } else {
-        toast.success("ニュースを取得しました");
-      }
+      // Display unified notification message
+      toast.success("ニュースが更新されました");
       // Refetch news data to update the UI
       refetchNews();
     },
