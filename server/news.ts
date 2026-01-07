@@ -47,8 +47,8 @@ function isCacheValid(): boolean {
 }
 
 /**
- * Fetch AI-related news from multiple sources
- * Uses Manus built-in API with fallback to mock data
+ * Fetch AI-related news from NewsAPI.org
+ * Uses real news data with fallback to mock data
  */
 export async function fetchAINews(forceRefresh: boolean = false): Promise<AINewsItem[]> {
   console.log("[News] fetchAINews called", { forceRefresh, cacheTimestamp: newsCache.timestamp, cacheSize: newsCache.data.length });
@@ -69,21 +69,20 @@ export async function fetchAINews(forceRefresh: boolean = false): Promise<AINews
   }
 
   try {
-    const apiUrl = ENV.forgeApiUrl;
-    const apiKey = ENV.forgeApiKey;
+    const apiKey = ENV.newsApiKey;
 
-    if (!apiUrl || !apiKey) {
-      console.warn("[News] Manus API not configured, returning mock data");
+    if (!apiKey) {
+      console.warn("[News] NewsAPI key not configured, returning mock data");
       return getMockNews();
     }
 
-    // Try to fetch from Manus Data API with multiple search queries
+    // Try to fetch from NewsAPI.org with multiple AI-related queries
     const searchQueries = [
-      "AI news",
       "artificial intelligence",
       "machine learning",
-      "ChatGPT",
-      "OpenAI",
+      "ChatGPT OR OpenAI",
+      "AI technology",
+      "deep learning",
     ];
 
     const allArticles: AINewsItem[] = [];
@@ -91,48 +90,32 @@ export async function fetchAINews(forceRefresh: boolean = false): Promise<AINews
     // Fetch news for each query (limit to first 3 to avoid rate limiting)
     for (let i = 0; i < Math.min(3, searchQueries.length); i++) {
       try {
-        const response = await fetch(`${apiUrl}/v1/data_api/search`, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            query: searchQueries[i],
-            type: "news",
-            limit: 5,
-            language: "en",
-          }),
-        });
+        const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(searchQueries[i])}&language=en&sortBy=publishedAt&pageSize=10&apiKey=${apiKey}`;
+        
+        const response = await fetch(url);
 
         if (response.ok) {
-          const data = await response.json() as {
-            results?: Array<{
-              title?: string;
-              description?: string;
-              url?: string;
-              source?: string;
-              published_at?: string;
-              image?: string;
-            }>;
-          };
+          const data = await response.json() as NewsAPIResponse;
 
-          if (data.results && Array.isArray(data.results)) {
-            const articles = data.results
-              .filter(item => item.title && item.url)
+          if (data.status === "ok" && data.articles && Array.isArray(data.articles)) {
+            const articles = data.articles
+              .filter(item => item.title && item.url && !item.title.includes("[Removed]"))
               .map((item, index) => ({
-                id: `api-${i}-${index}-${Date.now()}`,
-                title: item.title || "Untitled",
+                id: `newsapi-${i}-${index}-${Date.now()}`,
+                title: item.title,
                 description: item.description || "",
-                url: item.url || "",
-                source: item.source || "AI News",
-                publishedAt: item.published_at || new Date().toISOString(),
-                imageUrl: item.image,
+                url: item.url,
+                source: item.source.name,
+                publishedAt: item.publishedAt,
+                imageUrl: item.urlToImage || undefined,
                 category: searchQueries[i],
               }));
 
             allArticles.push(...articles);
+            console.log(`[News] Fetched ${articles.length} articles for query "${searchQueries[i]}"`);
           }
+        } else {
+          console.warn(`[News] Failed to fetch for query "${searchQueries[i]}": HTTP ${response.status}`);
         }
       } catch (error) {
         console.warn(`[News] Failed to fetch for query "${searchQueries[i]}":`, error);
@@ -157,12 +140,12 @@ export async function fetchAINews(forceRefresh: boolean = false): Promise<AINews
       newsCache.data = uniqueArticles.slice(0, 15); // Keep top 15
       newsCache.timestamp = Date.now();
 
-      console.log(`[News] Successfully fetched ${newsCache.data.length} articles from API`);
+      console.log(`[News] Successfully fetched ${newsCache.data.length} articles from NewsAPI.org`);
       return newsCache.data;
     }
 
     // Fallback to mock data if API returns nothing
-    console.warn("[News] No articles from API, using mock data");
+    console.warn("[News] No articles from NewsAPI.org, using mock data");
     return getMockNews();
   } catch (error) {
     console.error("[News] Error fetching news:", error);
@@ -199,62 +182,63 @@ function getMockNews(): AINewsItem[] {
     {
       id: `mock-2-${timestamp}`,
       title: "Google DeepMind Achieves Breakthrough in Protein Folding",
-      description: "DeepMind's AlphaFold 3 has successfully predicted the structure of nearly all known proteins, opening new possibilities for drug discovery and understanding diseases at the molecular level.",
-      url: "https://example.com/news/alphafold3",
-      source: "Tech Chronicle",
+      description: "Researchers at Google DeepMind have developed a new AI system that can predict protein structures with 99% accuracy, potentially revolutionizing drug discovery and disease treatment.",
+      url: "https://example.com/news/deepmind-protein",
+      source: "Tech Science Today",
       publishedAt: new Date(now.getTime() - 5 * 60 * 60 * 1000).toISOString(),
-      category: "machine learning",
+      category: "Research",
     },
     {
       id: `mock-3-${timestamp}`,
-      title: "AI Regulation Framework Proposed by EU Commission",
-      description: "The European Union has proposed comprehensive AI regulations that would require transparency in AI systems and establish safety standards for high-risk applications.",
-      url: "https://example.com/news/eu-ai-regulation",
-      source: "Policy Watch",
+      title: "Microsoft Integrates Advanced AI into Office Suite",
+      description: "Microsoft announces comprehensive AI integration across its Office 365 suite, bringing intelligent writing assistance, data analysis, and automation features to millions of users worldwide.",
+      url: "https://example.com/news/microsoft-office-ai",
+      source: "Business Tech Weekly",
       publishedAt: new Date(now.getTime() - 8 * 60 * 60 * 1000).toISOString(),
-      category: "AI news",
+      category: "Enterprise",
     },
     {
       id: `mock-4-${timestamp}`,
-      title: "Microsoft Integrates AI Copilot Across All Products",
-      description: "Microsoft announces the expansion of its AI Copilot feature to all Microsoft 365 applications, promising to revolutionize workplace productivity with intelligent assistance.",
-      url: "https://example.com/news/microsoft-copilot",
-      source: "Business Tech",
+      title: "New AI Regulations Proposed by European Union",
+      description: "The European Union has proposed comprehensive regulations for AI development and deployment, focusing on transparency, accountability, and ethical considerations in artificial intelligence systems.",
+      url: "https://example.com/news/eu-ai-regulations",
+      source: "Policy Watch",
       publishedAt: new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString(),
-      category: "artificial intelligence",
+      category: "Policy",
     },
     {
       id: `mock-5-${timestamp}`,
-      title: "Anthropic Releases Claude 4 with Enhanced Safety Features",
-      description: "Anthropic's new Claude 4 model introduces advanced safety mechanisms and improved reasoning capabilities, setting new standards for responsible AI development.",
-      url: "https://example.com/news/claude4-release",
-      source: "AI Insider",
-      publishedAt: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
-      category: "ChatGPT",
+      title: "Startup Raises $100M for AI-Powered Healthcare Platform",
+      description: "A Silicon Valley startup has secured $100 million in Series B funding to develop an AI-powered platform that assists doctors in diagnosing rare diseases and personalizing treatment plans.",
+      url: "https://example.com/news/healthcare-ai-funding",
+      source: "Venture Beat",
+      publishedAt: new Date(now.getTime() - 18 * 60 * 60 * 1000).toISOString(),
+      category: "Healthcare",
     },
     {
       id: `mock-6-${timestamp}`,
-      title: "Meta Releases Llama 3 Open Source Model",
-      description: "Meta has released Llama 3, a powerful open-source language model that rivals proprietary solutions. The model is available for commercial use and research.",
-      url: "https://example.com/news/llama3-release",
-      source: "Open Source AI",
-      publishedAt: new Date(now.getTime() - 36 * 60 * 60 * 1000).toISOString(),
-      category: "machine learning",
+      title: "AI-Generated Art Wins International Competition",
+      description: "An artwork created entirely by artificial intelligence has won first place in a prestigious international art competition, sparking debate about creativity and the role of AI in the arts.",
+      url: "https://example.com/news/ai-art-competition",
+      source: "Creative Tech",
+      publishedAt: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
+      category: "Arts",
     },
     {
       id: `mock-7-${timestamp}`,
-      title: "AI-Powered Drug Discovery Accelerates Clinical Trials",
-      description: "Pharmaceutical companies are using AI to identify promising drug candidates 50% faster than traditional methods, potentially saving billions in development costs.",
-      url: "https://example.com/news/ai-drug-discovery",
-      source: "Medical Tech Weekly",
-      publishedAt: new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString(),
-      category: "artificial intelligence",
+      title: "Autonomous Vehicles Achieve 1 Million Miles Without Incident",
+      description: "A fleet of AI-powered autonomous vehicles has successfully completed over 1 million miles of real-world driving without a single accident, marking a significant milestone in self-driving technology.",
+      url: "https://example.com/news/autonomous-vehicles-milestone",
+      source: "Auto Tech News",
+      publishedAt: new Date(now.getTime() - 30 * 60 * 60 * 1000).toISOString(),
+      category: "Transportation",
     },
   ];
 
-  // Cache mock data as well
+  // Cache mock data
   newsCache.data = mockData;
   newsCache.timestamp = Date.now();
 
+  console.log(`[News] Returning ${mockData.length} mock articles`);
   return mockData;
 }
