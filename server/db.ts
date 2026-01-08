@@ -4,7 +4,9 @@ import {
   InsertUser, users, 
   xCredentials, InsertXCredentials, XCredentials,
   tweetHistory, InsertTweetHistory, TweetHistory,
-  scheduleSettings, InsertScheduleSettings, ScheduleSettings
+  scheduleSettings, InsertScheduleSettings, ScheduleSettings,
+  twitterAccounts, InsertTwitterAccount, TwitterAccount,
+  accountSchedules, InsertAccountSchedule, AccountSchedule
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -250,4 +252,134 @@ export async function getEnabledSchedules(): Promise<ScheduleSettings[]> {
   return await db.select()
     .from(scheduleSettings)
     .where(eq(scheduleSettings.isEnabled, true));
+}
+
+// ============================================
+// Twitter Accounts Operations
+// ============================================
+
+export async function getTwitterAccountsByUserId(userId: number): Promise<TwitterAccount[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select()
+    .from(twitterAccounts)
+    .where(eq(twitterAccounts.userId, userId))
+    .orderBy(desc(twitterAccounts.createdAt));
+}
+
+export async function getTwitterAccountById(accountId: number): Promise<TwitterAccount | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select()
+    .from(twitterAccounts)
+    .where(eq(twitterAccounts.id, accountId))
+    .limit(1);
+  
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createTwitterAccount(data: InsertTwitterAccount): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(twitterAccounts).values(data);
+  return Number(result[0].insertId);
+}
+
+export async function updateTwitterAccount(
+  accountId: number,
+  data: Partial<InsertTwitterAccount>
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(twitterAccounts)
+    .set(data)
+    .where(eq(twitterAccounts.id, accountId));
+}
+
+export async function deleteTwitterAccount(accountId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(twitterAccounts)
+    .where(eq(twitterAccounts.id, accountId));
+}
+
+export async function updateTwitterAccountValidity(
+  accountId: number,
+  isValid: boolean
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(twitterAccounts)
+    .set({ isValid, lastVerifiedAt: new Date() })
+    .where(eq(twitterAccounts.id, accountId));
+}
+
+// ============================================
+// Account Schedules Operations
+// ============================================
+
+export async function getAccountSchedulesByAccountId(accountId: number): Promise<AccountSchedule | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select()
+    .from(accountSchedules)
+    .where(eq(accountSchedules.accountId, accountId))
+    .limit(1);
+  
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getEnabledAccountSchedules(): Promise<AccountSchedule[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select()
+    .from(accountSchedules)
+    .where(eq(accountSchedules.isEnabled, true));
+}
+
+export async function createAccountSchedule(data: InsertAccountSchedule): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(accountSchedules).values(data);
+  return Number(result[0].insertId);
+}
+
+export async function upsertAccountSchedule(data: InsertAccountSchedule): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await getAccountSchedulesByAccountId(data.accountId);
+  
+  if (existing) {
+    await db.update(accountSchedules)
+      .set({
+        isEnabled: data.isEnabled,
+        frequency: data.frequency,
+        preferredHour: data.preferredHour,
+        timezone: data.timezone,
+        maxTweetsPerDay: data.maxTweetsPerDay,
+        cronExpression: (data as any).cronExpression,
+      })
+      .where(eq(accountSchedules.accountId, data.accountId));
+  } else {
+    await db.insert(accountSchedules).values(data);
+  }
+}
+
+export async function updateAccountScheduleLastRunAt(accountId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(accountSchedules)
+    .set({ lastRunAt: new Date() })
+    .where(eq(accountSchedules.accountId, accountId));
 }

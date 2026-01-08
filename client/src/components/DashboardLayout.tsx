@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Settings, Newspaper, History, Clock } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Settings, Newspaper, History, Clock, Users } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -32,6 +32,7 @@ const menuItems = [
   { icon: Newspaper, label: "ニュースフィード", path: "/news" },
   { icon: History, label: "ツイート履歴", path: "/history" },
   { icon: Clock, label: "スケジュール", path: "/schedule" },
+  { icon: Users, label: "複数アカウント", path: "/accounts" },
   { icon: Settings, label: "X API設定", path: "/settings" },
 ];
 

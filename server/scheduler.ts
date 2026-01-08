@@ -12,6 +12,7 @@ interface ScheduleJob {
 }
 
 const activeJobs: Map<number, ScheduleJob> = new Map();
+const activeAccountJobs: Map<number, ScheduleJob> = new Map();
 
 /**
  * Generate a summary for a news item using LLM
@@ -211,4 +212,164 @@ export function stopAllJobs(): void {
   });
   activeJobs.clear();
   console.log("[Scheduler] Stopped all schedule jobs");
+}
+
+
+/**
+ * Execute automatic tweet posting for a specific account
+ */
+async function executeAccountAutoPost(accountId: number, schedule: any): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) {
+      console.warn("[Scheduler] Database not available");
+      return;
+    }
+
+    // Get account credentials
+    const { twitterAccounts } = require("../drizzle/schema");
+    const accountResult = await db
+      .select()
+      .from(twitterAccounts)
+      .where(eq(twitterAccounts.id, accountId))
+      .limit(1);
+
+    if (!accountResult || accountResult.length === 0) {
+      console.warn(`[Scheduler] Account ${accountId} not found`);
+      return;
+    }
+
+    const account = accountResult[0];
+    if (!account.isValid || !account.isActive) {
+      console.warn(`[Scheduler] Account ${accountId} is not valid or active`);
+      return;
+    }
+
+    // Fetch fresh news
+    clearNewsCache();
+    const news = await fetchAINews();
+
+    if (news.length === 0) {
+      console.warn("[Scheduler] No news available to post");
+      return;
+    }
+
+    // Select a random news item
+    const selectedNews = news[Math.floor(Math.random() * news.length)];
+
+    // Generate summary
+    const summary = await generateSummary(selectedNews.title, selectedNews.description);
+
+    if (!summary || summary.length === 0) {
+      console.warn("[Scheduler] Failed to generate summary");
+      return;
+    }
+
+    // Post to X
+    const result = await postTweet(
+      {
+        apiKey: account.apiKey,
+        apiSecret: account.apiSecret,
+        accessToken: account.accessToken,
+        accessTokenSecret: account.accessTokenSecret,
+      },
+      summary
+    );
+
+    // Record in tweet history
+    const tweetHistorySchema = require("../drizzle/schema").tweetHistory;
+    await db.insert(tweetHistorySchema).values({
+      userId: account.userId,
+      accountId: accountId,
+      content: summary,
+      originalNewsTitle: selectedNews.title,
+      originalNewsUrl: selectedNews.url,
+      status: "posted",
+      tweetId: result.tweetId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    console.log(`[Scheduler] Successfully posted tweet for account ${accountId}: ${result.tweetId}`);
+  } catch (error) {
+    console.error(`[Scheduler] Error executing auto post for account ${accountId}:`, error);
+  }
+}
+
+/**
+ * Start a schedule job for a specific account
+ */
+export function startAccountScheduleJob(accountId: number, schedule: any): void {
+  if (!schedule.isEnabled || !schedule.cronExpression) {
+    console.warn(`[Scheduler] Schedule not properly configured for account ${accountId}`);
+    return;
+  }
+
+  // Stop existing job if any
+  stopAccountScheduleJob(accountId);
+
+  try {
+    const task = cron.schedule(schedule.cronExpression as string, async () => {
+      console.log(`[Scheduler] Executing scheduled task for account ${accountId}`);
+      await executeAccountAutoPost(accountId, schedule);
+    });
+
+    activeAccountJobs.set(accountId, {
+      id: `account-job-${accountId}-${Date.now()}`,
+      task,
+    });
+
+    console.log(`[Scheduler] Started schedule job for account ${accountId}: ${schedule.cronExpression}`);
+  } catch (error) {
+    console.error(`[Scheduler] Error starting schedule job for account ${accountId}:`, error);
+  }
+}
+
+/**
+ * Stop a schedule job for a specific account
+ */
+export function stopAccountScheduleJob(accountId: number): void {
+  const job = activeAccountJobs.get(accountId);
+  if (job) {
+    job.task.stop();
+    activeAccountJobs.delete(accountId);
+    console.log(`[Scheduler] Stopped schedule job for account ${accountId}`);
+  }
+}
+
+/**
+ * Initialize all active account schedules from database
+ */
+export async function initializeAccountSchedules(): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) {
+      console.warn("[Scheduler] Database not available for account schedules initialization");
+      return;
+    }
+
+    const { accountSchedules } = require("../drizzle/schema");
+    const allSchedules = await db.select().from(accountSchedules);
+
+    for (const schedule of allSchedules) {
+      if (schedule.isEnabled) {
+        startAccountScheduleJob(schedule.accountId, schedule);
+      }
+    }
+
+    console.log(`[Scheduler] Initialized ${allSchedules.length} account schedules`);
+  } catch (error) {
+    console.error("[Scheduler] Error initializing account schedules:", error);
+  }
+}
+
+/**
+ * Stop all active account jobs
+ */
+export function stopAllAccountJobs(): void {
+  activeAccountJobs.forEach((job) => {
+    job.task.stop();
+  });
+  activeAccountJobs.clear();
+  console.log("[Scheduler] Stopped all account schedule jobs");
 }

@@ -1,0 +1,1 @@
+ALTER TABLE `tweet_history` ADD `accountId` int;

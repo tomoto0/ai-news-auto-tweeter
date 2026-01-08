@@ -16,6 +16,16 @@ import {
   getScheduleSettingsByUserId,
   getScheduleSettings,
   upsertScheduleSettings,
+  getTwitterAccountsByUserId,
+  getTwitterAccountById,
+  createTwitterAccount,
+  updateTwitterAccount,
+  deleteTwitterAccount,
+  updateTwitterAccountValidity,
+  getAccountSchedulesByAccountId,
+  getEnabledAccountSchedules,
+  upsertAccountSchedule,
+  updateAccountScheduleLastRunAt,
 } from "./db";
 import { postTweet, verifyCredentials } from "./twitter";
 import { fetchAINews, type AINewsItem } from "./news";
@@ -222,6 +232,209 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         await deleteTweetHistory(input.id, ctx.user.id);
+        return { success: true };
+      }),
+  }),
+
+  // Twitter Accounts Management
+  accounts: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const accounts = await getTwitterAccountsByUserId(ctx.user.id);
+      return accounts.map(acc => ({
+        id: acc.id,
+        accountName: acc.accountName,
+        accountHandle: acc.accountHandle,
+        isActive: acc.isActive,
+        isValid: acc.isValid,
+        lastVerifiedAt: acc.lastVerifiedAt,
+        createdAt: acc.createdAt,
+      }));
+    }),
+
+    get: protectedProcedure
+      .input(z.object({ accountId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const account = await getTwitterAccountById(input.accountId);
+        if (!account || account.userId !== ctx.user.id) {
+          throw new Error("Account not found");
+        }
+        return {
+          id: account.id,
+          accountName: account.accountName,
+          accountHandle: account.accountHandle,
+          isActive: account.isActive,
+          isValid: account.isValid,
+          lastVerifiedAt: account.lastVerifiedAt,
+          createdAt: account.createdAt,
+        };
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        accountName: z.string().min(1),
+        accountHandle: z.string().optional(),
+        apiKey: z.string().min(1),
+        apiSecret: z.string().min(1),
+        accessToken: z.string().min(1),
+        accessTokenSecret: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const isValid = await verifyCredentials({
+          apiKey: input.apiKey,
+          apiSecret: input.apiSecret,
+          accessToken: input.accessToken,
+          accessTokenSecret: input.accessTokenSecret,
+        });
+
+        const accountId = await createTwitterAccount({
+          userId: ctx.user.id,
+          accountName: input.accountName,
+          accountHandle: input.accountHandle || null,
+          apiKey: input.apiKey,
+          apiSecret: input.apiSecret,
+          accessToken: input.accessToken,
+          accessTokenSecret: input.accessTokenSecret,
+          isActive: true,
+          isValid,
+          lastVerifiedAt: new Date(),
+        });
+
+        await upsertAccountSchedule({
+          accountId,
+          userId: ctx.user.id,
+          isEnabled: false,
+          frequency: "daily",
+          preferredHour: 9,
+          timezone: "Asia/Tokyo",
+          maxTweetsPerDay: 5,
+          cronExpression: "0 9 * * *",
+        });
+
+        return { success: true, accountId, isValid };
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        accountId: z.number(),
+        accountName: z.string().min(1).optional(),
+        accountHandle: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const account = await getTwitterAccountById(input.accountId);
+        if (!account || account.userId !== ctx.user.id) {
+          throw new Error("Account not found");
+        }
+
+        const updateData: Record<string, any> = {};
+        if (input.accountName) updateData.accountName = input.accountName;
+        if (input.accountHandle !== undefined) updateData.accountHandle = input.accountHandle || null;
+        if (input.isActive !== undefined) updateData.isActive = input.isActive;
+
+        await updateTwitterAccount(input.accountId, updateData);
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ accountId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const account = await getTwitterAccountById(input.accountId);
+        if (!account || account.userId !== ctx.user.id) {
+          throw new Error("Account not found");
+        }
+
+        await deleteTwitterAccount(input.accountId);
+        return { success: true };
+      }),
+
+    verify: protectedProcedure
+      .input(z.object({ accountId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const account = await getTwitterAccountById(input.accountId);
+        if (!account || account.userId !== ctx.user.id) {
+          throw new Error("Account not found");
+        }
+
+        const isValid = await verifyCredentials({
+          apiKey: account.apiKey,
+          apiSecret: account.apiSecret,
+          accessToken: account.accessToken,
+          accessTokenSecret: account.accessTokenSecret,
+        });
+
+        await updateTwitterAccountValidity(input.accountId, isValid);
+        return { success: true, isValid };
+      }),
+  }),
+
+  // Account Schedules
+  accountSchedules: router({
+    get: protectedProcedure
+      .input(z.object({ accountId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const account = await getTwitterAccountById(input.accountId);
+        if (!account || account.userId !== ctx.user.id) {
+          throw new Error("Account not found");
+        }
+
+        const schedule = await getAccountSchedulesByAccountId(input.accountId);
+        return schedule ?? {
+          accountId: input.accountId,
+          isEnabled: false,
+          frequency: "daily" as const,
+          preferredHour: 9,
+          timezone: "Asia/Tokyo",
+          maxTweetsPerDay: 5,
+        };
+      }),
+
+    save: protectedProcedure
+      .input(z.object({
+        accountId: z.number(),
+        isEnabled: z.boolean(),
+        frequency: z.enum(["hourly", "every_3_hours", "every_6_hours", "daily"]),
+        preferredHour: z.number().min(0).max(23),
+        timezone: z.string(),
+        maxTweetsPerDay: z.number().min(1).max(20),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const account = await getTwitterAccountById(input.accountId);
+        if (!account || account.userId !== ctx.user.id) {
+          throw new Error("Account not found");
+        }
+
+        let cronExpression = "0 0 * * *";
+        if (input.frequency === "hourly") {
+          cronExpression = "0 * * * *";
+        } else if (input.frequency === "every_3_hours") {
+          cronExpression = "0 */3 * * *";
+        } else if (input.frequency === "every_6_hours") {
+          cronExpression = "0 */6 * * *";
+        } else if (input.frequency === "daily") {
+          cronExpression = `0 ${input.preferredHour} * * *`;
+        }
+
+        await upsertAccountSchedule({
+          accountId: input.accountId,
+          userId: ctx.user.id,
+          isEnabled: input.isEnabled,
+          frequency: input.frequency,
+          preferredHour: input.preferredHour,
+          timezone: input.timezone,
+          maxTweetsPerDay: input.maxTweetsPerDay,
+          cronExpression,
+        });
+
+        const { startAccountScheduleJob, stopAccountScheduleJob } = await import("./scheduler");
+        if (input.isEnabled) {
+          const schedule = await getAccountSchedulesByAccountId(input.accountId);
+          if (schedule) {
+            startAccountScheduleJob(input.accountId, { ...schedule, cronExpression });
+          }
+        } else {
+          stopAccountScheduleJob(input.accountId);
+        }
+
         return { success: true };
       }),
   }),

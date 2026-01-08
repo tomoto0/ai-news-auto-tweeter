@@ -10,6 +10,8 @@ import Settings from "./pages/Settings";
 import NewsFeed from "./pages/NewsFeed";
 import TweetHistory from "./pages/TweetHistory";
 import Schedule from "./pages/Schedule";
+import AccountsManager from "./pages/AccountsManager";
+import AccountSchedule from "./pages/AccountSchedule";
 
 function Router() {
   return (
@@ -20,6 +22,8 @@ function Router() {
       <Route path="/news" component={NewsFeed} />
       <Route path="/history" component={TweetHistory} />
       <Route path="/schedule" component={Schedule} />
+      <Route path="/accounts" component={AccountsManager} />
+      <Route path="/accounts/schedule" component={AccountSchedule} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
